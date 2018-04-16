@@ -3,10 +3,10 @@ import unittest.mock as mock
 
 from click.testing import CliRunner
 
-from golem.core.variables import PROTOCOL_CONST
 from golem.testutils import TempDirFixture, PEP8MixIn
 from golem.tools.ci import ci_skip
 from golemapp import start
+from tests.golem.config.utils import mock_config
 
 
 @ci_skip
@@ -47,25 +47,24 @@ class TestGolemApp(TempDirFixture, PEP8MixIn):
     def test_patch_protocol_id(self, node_class, *_):
         runner = CliRunner()
         custom_id = '123456'
+        args = ['--datadir', self.path, '--protocol_id', custom_id]
 
         # On testnet
-        runner.invoke(
-            start,
-            ['--datadir', self.path, '--protocol_id', custom_id],
-            catch_exceptions=False,
-        )
-        assert node_class.called
-        node_class.reset_mock()
-        assert PROTOCOL_CONST.ID == custom_id + '-testnet'
+        with mock_config(patch_active=True):
+            runner.invoke(start, args, catch_exceptions=False,)
+            assert node_class.called
+            node_class.reset_mock()
+
+            from golem.core.variables import PROTOCOL_CONST
+            assert PROTOCOL_CONST.ID == custom_id + '-testnet'
 
         # On mainnet
-        runner.invoke(
-            start,
-            ['--datadir', self.path, '--protocol_id', custom_id, '--mainnet'],
-            catch_exceptions=False,
-        )
-        assert node_class.called
-        assert PROTOCOL_CONST.ID == custom_id
+        with mock_config('mainnet', patch_active=True):
+            runner.invoke(start, args + ['--mainnet'], catch_exceptions=False,)
+            assert node_class.called
+
+            from golem.core.variables import PROTOCOL_CONST
+            assert PROTOCOL_CONST.ID == custom_id
 
     @mock.patch('golem.rpc.cert.CertificateManager')
     def test_generate_rpc_cert(self, cert_manager, *_):
